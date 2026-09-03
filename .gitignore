@@ -1,0 +1,16 @@
+# The credentials file is the whole reason its path is configurable: it lives
+# outside the repo and must never be committed, whatever it ends up called.
+creds*
+*.txt
+*.pem
+*.key
+
+# Stale editor and rescue copies. A .bak of a panel is a second, older copy of
+# the plugin sitting in the tree, and the shell can be told to load it.
+*.bak
+*.bak.*
+*.orig
+*.rej
+*~
+
+*.local.*

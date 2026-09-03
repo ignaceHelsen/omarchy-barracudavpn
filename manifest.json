@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "id": "ignace.barracudavpn",
+  "name": "Barracuda VPN",
+  "version": "1.1.0",
+  "author": "Ignace Helsen",
+  "description": "Connect / disconnect the Barracuda VPN tunnel; opens the interactive client on right click",
+  "homepage": "https://github.com/ignacehelsen/omarchy-barracuda-vpn",
+  "repository": "https://github.com/ignacehelsen/omarchy-barracuda-vpn",
+  "license": "MIT",
+  "keywords": [
+    "vpn",
+    "barracuda",
+    "network",
+    "tunnel"
+  ],
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "BarracudaPanel.qml"
+  },
+  "barWidget": {
+    "displayName": "Barracuda VPN",
+    "description": "Connect / disconnect the Barracuda VPN tunnel; opens the interactive client on right click",
+    "category": "Network",
+    "allowMultiple": false,
+    "defaultSection": "right",
+    "defaults": {
+      "credsPath": "~/creds.txt"
+    },
+    "schema": [
+      {
+        "key": "credsPath",
+        "type": "path",
+        "label": "Credentials file",
+        "defaultValue": "~/creds.txt",
+        "description": "A plain text file holding the passwords the Barracuda client needs to bring the tunnel up without prompting. See the README for the format. Keep it mode 0600; it is read only when you press Connect."
+      }
+    ]
+  }
+}

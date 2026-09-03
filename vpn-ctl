@@ -1,0 +1,93 @@
+#!/bin/bash
+# Controls the Barracuda VPN tunnel for the ignace.barracudavpn bar widget.
+# The client binary is setuid root (4755) once installed, so no sudo needed
+# here. Status detection keys on the documented "Successfully connected"
+# string the client prints while the tunnel is up.
+set -uo pipefail
+
+VPN=/usr/local/bin/barracudavpn
+
+# Credentials file: --creds wins, then $BARRACUDA_CREDS, then the default.
+# The default has to stay ~/creds.txt -- nothing merges the manifest default
+# in, so this literal is what runs whenever the setting is unset.
+CREDS="${BARRACUDA_CREDS:-$HOME/creds.txt}"
+
+while [[ ${1:-} == --* ]]; do
+  case "$1" in
+    --creds)
+      [[ $# -ge 2 ]] || { echo "--creds needs a path" >&2; exit 2; }
+      CREDS="$2"
+      shift 2
+      ;;
+    --) shift; break ;;
+    *) echo "unknown option: $1" >&2; exit 2 ;;
+  esac
+done
+
+# A path out of shell.json arrives literally: no shell ever saw it, so a
+# leading ~ is still a tilde rather than $HOME.
+case "$CREDS" in
+  "~") CREDS="$HOME" ;;
+  "~/"*) CREDS="$HOME/${CREDS#\~/}" ;;
+esac
+
+case "${1:-status}" in
+  status)
+    # Prints 1 when the tunnel is up, 0 otherwise.
+    if [[ ! -x $VPN ]]; then
+      echo "client not installed at $VPN" >&2
+      echo 0
+      exit 0
+    fi
+    out=$("$VPN" --status 2>&1 || true)
+    # Strip negations first so "DISCONNECTED" / "not connected" don't count,
+    # then any remaining "connected" means up ("Status: CONNECTED",
+    # "Successfully connected", ...).
+    clean=$(sed -E 's/disconnected//Ig; s/not[[:space:]]+connected//Ig' <<<"$out")
+    if grep -qi "connected" <<<"$clean"; then
+      echo 1
+    else
+      echo 0
+    fi
+    ;;
+  start)
+    SERVER_PWD="" KEY_PWD=""
+    if [[ -r $CREDS ]]; then
+      while IFS= read -r line; do
+        case "$line" in
+          "Server Password:"*) SERVER_PWD="${line#Server Password: }" ;;
+          "Certificate password:"*) KEY_PWD="${line#Certificate password: }" ;;
+          "License password:"*) KEY_PWD="${line#License password: }" ;;
+        esac
+      done < "$CREDS"
+    fi
+    if [[ -z $SERVER_PWD || -z $KEY_PWD ]]; then
+      echo "missing credentials in $CREDS" >&2
+      exit 1
+    fi
+    exec "$VPN" --start --keypwd "$KEY_PWD" --serverpwd "$SERVER_PWD"
+    ;;
+  stop)
+    exec "$VPN" --stop
+    ;;
+  speeds)
+    # Prints "<down_bps> <up_bps> <iface>" sampled over ~0.7s. Prefers the
+    # VPN tunnel interface when present, else the default-route interface.
+    IFACE=""
+    for d in /sys/class/net/*; do
+      b=${d##*/}
+      case "$b" in
+        lo) continue ;;
+        tun*|tap*|ppp*|wg*) IFACE=$b; break ;;
+      esac
+    done
+    if [[ -z $IFACE ]]; then
+      IFACE=$(ip route get 1.1.1.1 2>/dev/null | sed -n 's/.* dev \([^ ]*\).*/\1/p')
+    fi
+    [[ -n $IFACE ]] || exit 1
+    read -r r1 t1 _ < <(awk -v i="$IFACE:" '$1==i{print $2, $10}' /proc/net/dev)
+    sleep 0.7
+    read -r r2 t2 _ < <(awk -v i="$IFACE:" '$1==i{print $2, $10}' /proc/net/dev)
+    echo "$(( (r2 - r1) * 10 / 7 )) $(( (t2 - t1) * 10 / 7 )) $IFACE"
+    ;;
+esac
